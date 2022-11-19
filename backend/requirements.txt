@@ -1,0 +1,4 @@
+fastapi
+openai
+python-dotenv
+fastapi-cache2
