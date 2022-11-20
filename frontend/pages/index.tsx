@@ -2,7 +2,6 @@ import type { NextPage } from "next";
 import { Fragment } from "react";
 import { Readability } from "@mozilla/readability";
 import Head from "next/head";
-import NextImage from "next/image";
 import {
   Badge,
   Box,
@@ -23,12 +22,9 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { FormEvent, useEffect, useState } from "react";
-import { AlertTriangle, Check, Edit2 } from "react-feather";
-import Link from "next/link";
-import { chakra } from "@chakra-ui/react";
+import { Check } from "react-feather";
 import {
   motion,
-  isValidMotionProp,
   useTransform,
   useSpring,
   MotionValue,
@@ -577,7 +573,7 @@ const Home: NextPage = () => {
                   onClick={linkTo(
                     "https://apnews.com/article/elon-musk-biden-twitter-inc-technology-congress-d88e3de4b3cc095926dc133f53dc3320"
                   )}
-                  src={"/sample_d.jpeg"}
+                  src={"/sample_d.webp"}
                   name={
                     "Musk restores Trump’s Twitter account after online poll"
                   }
