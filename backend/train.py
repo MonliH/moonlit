@@ -61,7 +61,7 @@ training_args = TrainingArguments(
     save_steps=128,
     logging_strategy="steps",
     logging_steps=16,
-    num_train_epochs=1,
+    num_train_epochs=3,
     warmup_ratio=0.05,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=10,
@@ -77,5 +77,5 @@ trainer = Trainer(
 )
 
 trainer.train(
-    resume_from_checkpoint="checkpoints/bigbird-1/checkpoint-2432",
+    resume_from_checkpoint="checkpoints/bigbird-1/checkpoint-3840",
 )

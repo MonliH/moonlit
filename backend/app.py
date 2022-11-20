@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import dotenv
 import os
 import openai
-from transformers import pipeline
+from transformers import pipeline, BigBirdForSequenceClassification
 
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
@@ -37,6 +37,9 @@ async def startup():
 subjective_classifier = pipeline(
     "text-classification", model="cffl/bert-base-styleclassification-subjective-neutral"
 )
+model = BigBirdForSequenceClassification.from_pretrained("checkpoints/bigbird-1/checkpoint-3840")
+classify_political_lean = pipeline("text-classification", model=model, tokenizer="google/bigbird-roberta-base")
+
 sid = SentimentIntensityAnalyzer()
 
 openai.api_key = os.getenv("API_KEY")
@@ -83,6 +86,9 @@ async def post_get_emotion(paragraph: Texts):
 async def post_get_emotion(paragraphs: Texts):
     return subjective_classifier(paragraphs.texts)
 
+@app.post("/get-side")
+async def classify_politics(paragraphs: Texts):
+    return classify_political_lean(paragraphs.texts)
 
 class Url(BaseModel):
     url: str
