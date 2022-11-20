@@ -2,3 +2,6 @@ bias_data/
 __pycache__/
 .env
 custom_data/
+AllSides/
+checkpoints/
+wandb/
