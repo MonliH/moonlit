@@ -11,7 +11,8 @@ import os
 import openai 
 from transformers import pipeline
 
-subjective_classifier = pipeline("text-classification", model="cffl/bert-base-styleclassification-subjective-neutral")
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
 
 dotenv.load_dotenv(".env")
 
@@ -31,14 +32,19 @@ app.add_middleware(
 async def startup():
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
 
+subjective_classifier = pipeline("text-classification", model="cffl/bert-base-styleclassification-subjective-neutral")
+sid = SentimentIntensityAnalyzer()
+
 openai.api_key = os.getenv("API_KEY")
 openai.api_base = "https://api.goose.ai/v1"
 
-emotion_template = """Label the emotion that the author of the sentence is trying to create. Choices are joy, inspiration, suprise, anger, disgust, sadness, and fear.
+emotion_template = """Label the emotion that the author of the sentence is trying to create. Choices are joy, inspiration, suprise, anger, disgust, sadness, fear, or neutral.
 Setence: "One of the prominent successes of the Canadians today has been stopping the spread of the virus."
 Reader's emotion: joy
 Setence: "He mislead our entire country! He needs to be fired!"
 Reader's emotion: anger
+Setence: "Former US President Donald Trump's Twitter account has been reinstated on the platform."
+Reader's emotion: neutral
 Setence: "And the discovery might provide hope that other bird species thought extinct are still out there somewhere."
 Reader's emotion: hope
 Sentence: "{text}"
@@ -47,13 +53,14 @@ Reader's emotion:"""
 
 def get_emotion(sentences):
     completion = openai.Completion.create(
+        # engine="gpt-neo-20b",
         engine="gpt-neo-125m",
         prompt=[emotion_template.format(text=sentence) for sentence in sentences],
         max_tokens=15,
         temperature=0,
         stop="\n"
     )
-    return [choice["text"].strip() for choice in completion["choices"]]
+    return [(label := choice["text"].strip(), sid.polarity_scores(label)["compound"]) for choice in completion["choices"]]
 
 class Texts(BaseModel):
     texts: List[str]
@@ -70,7 +77,7 @@ class Url(BaseModel):
     url: str
 
 def process_line(line: str):
-    if line.isupper() or (line.startswith("NEW ") and line.endswith("!")):
+    if line.isupper() or (line.startswith("NEW ") and line.endswith("!")) or line.startswith("WATCH | "):
         return None
     if line.startswith("Video Ad Feedback"):
         return line.removeprefix("Video Ad Feedback")

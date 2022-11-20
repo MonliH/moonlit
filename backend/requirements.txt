@@ -3,3 +3,4 @@ openai
 python-dotenv
 fastapi-cache2
 newspaper3k
+nltk

@@ -13,4 +13,7 @@
 # t2t = pipeline("text-classification", model="cffl/bert-base-styleclassification-subjective-neutral")
 # for line in passage.splitlines():
 #     print(t2t(line), line)
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+sid = SentimentIntensityAnalyzer()
+print(sid.polarity_scores('bad'))
 

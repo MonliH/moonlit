@@ -1,9 +1,12 @@
 import type { NextPage } from "next";
 import { Readability } from "@mozilla/readability";
+import {motion} from "framer-motion";
 import Head from "next/head";
 import {
+  Badge,
   Box,
   Button,
+  chakra,
   Divider,
   FormControl,
   FormErrorMessage,
@@ -15,18 +18,19 @@ import {
   Tooltip,
   VStack,
 } from "@chakra-ui/react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AlertTriangle, Check } from "react-feather";
+import { useSpring } from "framer-motion";
 
 interface Annotation {
-  emotion?: string;
+  emotion?: [string, number];
   subjective: string;
 }
 
 interface ArticleData {
   title: string;
   text: string[];
-  annotations: (Annotation | null)[];
+  annotations?: Annotation[];
   authors: string[];
   cover_image: string;
 }
@@ -36,11 +40,24 @@ function capitalizeFirstLetter(s: string) {
 }
 
 function Article({ article }: { article: ArticleData }) {
+  const paperAnnotations = useSpring(0);
+
+  useEffect(() => {
+    console.log(article.annotations);
+    if (article.annotations) {
+      console.log("start animation");
+      paperAnnotations.set(1);
+    } else {
+      console.log("reverse animation");
+      paperAnnotations.set(0);
+    }
+  }, [article]);
+
   return (
     <Box>
       <Heading width="55%">{article.title}</Heading>
       <Text fontSize="24px" mb="10">
-        {article.authors}
+        {article.authors.join(", ")}
       </Text>
       <Image
         mb="6"
@@ -50,25 +67,46 @@ function Article({ article }: { article: ArticleData }) {
         borderRadius="5"
       />
       <Divider mb="6" width="55%" />
-      <Box>
+      
         {article.text.map((paragraph, index) => {
-          const annotation = article.annotations[index];
+          const annotation = article.annotations ? article.annotations[index] : undefined;
           const component = annotation && (
-            <HStack
-              width="200px"
-              fontSize="xs"
-              borderLeftWidth="1"
-              borderLeftColor="black"
-            >
-              {annotation.subjective && (
+            <HStack width="200px" fontSize="xs">
+              {/* {annotation.subjective && (
                 <Tooltip label="This paragraph may be subjective.">
                   <AlertTriangle color="red" />
                 </Tooltip>
-              )}
+              )} */}
               {annotation.emotion && (
-                <>
-                  <b>{capitalizeFirstLetter(annotation.emotion)}</b>
-                </>
+                <Tooltip
+                  label={
+                    annotation.emotion[0] === "neutral"
+                      ? `This paragraph is mostly neutral.`
+                      : `This paragraph may cause feelings of ${annotation.emotion[0]}.`
+                  }
+                >
+                  <Badge
+                    fontSize={"sm"}
+                    textTransform={
+                    "capitalize"
+                    }
+                    fontWeight={
+                      annotation.emotion[0] === "neutral" ? "medium" : "bold"
+                    }
+                    py="2px"
+                    px="6px"
+                    variant={"subtle"}
+                    colorScheme={
+                      annotation.emotion[0] == "neutral"
+                        ? "gray"
+                        : annotation.emotion[1] > 0
+                        ? "green"
+                        : "red"
+                    }
+                  >
+                    {capitalizeFirstLetter(annotation.emotion[0])}
+                  </Badge>
+                </Tooltip>
               )}
               {!annotation.emotion && !annotation.subjective && (
                 <Tooltip label="This paragraph is neutral.">
@@ -79,12 +117,15 @@ function Article({ article }: { article: ArticleData }) {
           );
           return (
             <HStack key={index} mb="6">
-              <Text width="50%">{paragraph}</Text>
+              <Text width="53%" pr="6" mr="2" borderRightWidth="1px">
+                {paragraph}
+              </Text>
+      <motion.div style={{opacity: paperAnnotations}}>
               {component}
+      </motion.div>
             </HStack>
           );
         })}
-      </Box>
     </Box>
   );
 }
@@ -115,59 +156,57 @@ const Home: NextPage = () => {
           "text/html"
         );
         const article = new Readability(doc).parse();
-        console.log(article);
       })();
 
       if (res.ok) {
         const doc = await res.json();
         const lines = doc.text.split(/\n+/).map((line: string) => line.trim());
         doc.text = lines;
-        doc.annotations = lines.map(() => null);
+        doc.annotations = undefined;
         setArticle(doc);
 
-        const isNeutral = await fetch("http://localhost:8000/is-biased", {
-          method: "POST",
-          body: JSON.stringify({ texts: lines }),
-          headers: { "Content-Type": "application/json" },
-        });
-        const isNeutralJson = await isNeutral.json();
+        // const isNeutral = await fetch("http://localhost:8000/is-biased", {
+        //   method: "POST",
+        //   body: JSON.stringify({ texts: lines }),
+        //   headers: { "Content-Type": "application/json" },
+        // });
+        // const isNeutralJson = await isNeutral.json();
+        // const newDoc = {
+        //   ...doc,
+        //   annotations: isNeutralJson.map(
+        //     ({ label, score }: { label: string; score: number }) =>
+        //       label === "NEUTRAL"
+        //         ? { emotion: undefined, subjective: false }
+        //         : {
+        //             emotion: undefined,
+        //             subjective: label === "SUBJECTIVE" && score > 0.7,
+        //           }
+        //   ),
+        // };
+        // const nonNeutralParagraphs = isNeutralJson
+        //   .map(
+        //     ({ label, score }: { label: string; score: number }, idx: number) =>
+        //       label === "NEUTRAL" ? null : idx
+        //   )
+        //   .filter((idx: number | null) => idx !== null);
+
         const newDoc = {
           ...doc,
-          annotations: isNeutralJson.map(
-            ({ label, score }: { label: string; score: number }) =>
-              label === "NEUTRAL"
-                ? { emotion: undefined, subjective: false }
-                : {
-                    emotion: "anger",
-                    subjective: label === "SUBJECTIVE" && score > 0.7,
-                  }
-          ),
+          text: [...doc.text],
         };
-        const nonNeutralParagraphs = isNeutralJson
-          .map(
-            ({ label, score }: { label: string; score: number }, idx: number) =>
-              label === "NEUTRAL" ? null : idx
-          )
-          .filter((idx: number | null) => idx !== null);
 
         const emotionRes = await fetch("http://localhost:8000/get-emotion", {
           method: "POST",
           body: JSON.stringify({
-            texts: nonNeutralParagraphs.map((idx: number) => lines[idx]),
+            texts: newDoc.text,
           }),
           headers: { "Content-Type": "application/json" },
         });
 
         const emotion = await emotionRes.json();
-        console.log(emotion);
-
-        for (let i = 0; i < emotion.length; i++) {
-          const idx = nonNeutralParagraphs[i];
-          newDoc.annotations[idx] = {
-            emotion: emotion[i],
-            subjective: newDoc.annotations[idx]?.subjective,
-          };
-        }
+        newDoc.annotations = emotion.map((emotion: [string, number]) => ({
+          emotion,
+        }));
 
         setArticle(newDoc);
       } else {
