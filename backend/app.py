@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import dotenv
 import os
-import openai 
+import openai
 from transformers import pipeline
 
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -28,11 +28,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 async def startup():
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
 
-subjective_classifier = pipeline("text-classification", model="cffl/bert-base-styleclassification-subjective-neutral")
+
+subjective_classifier = pipeline(
+    "text-classification", model="cffl/bert-base-styleclassification-subjective-neutral"
+)
 sid = SentimentIntensityAnalyzer()
 
 openai.api_key = os.getenv("API_KEY")
@@ -58,41 +62,72 @@ def get_emotion(sentences):
         prompt=[emotion_template.format(text=sentence) for sentence in sentences],
         max_tokens=15,
         temperature=0,
-        stop="\n"
+        stop="\n",
     )
-    return [(label := choice["text"].strip(), sid.polarity_scores(label)["compound"]) for choice in completion["choices"]]
+    return [
+        (label := choice["text"].strip(), sid.polarity_scores(label)["compound"])
+        for choice in completion["choices"]
+    ]
+
 
 class Texts(BaseModel):
     texts: List[str]
+
 
 @app.post("/get-emotion")
 async def post_get_emotion(paragraph: Texts):
     return get_emotion(paragraph.texts)
 
+
 @app.post("/is-biased")
 async def post_get_emotion(paragraphs: Texts):
     return subjective_classifier(paragraphs.texts)
 
+
 class Url(BaseModel):
     url: str
 
+
 def process_line(line: str):
-    if line.isupper() or (line.startswith("NEW ") and line.endswith("!")) or line.startswith("WATCH | "):
+    if (
+        line.isupper()
+        or (line.startswith("NEW ") and line.endswith("!"))
+        or line.startswith("WATCH | ")
+        or line.startswith("Send this page to someone via email")
+        or line.startswith("Story continues below advertisement")
+        or line.startswith("FILE -")
+    ):
         return None
     if line.startswith("Video Ad Feedback"):
         return line.removeprefix("Video Ad Feedback")
-    
+
     return line
+
 
 @app.post("/news-info")
 async def get_news_info(url: Url):
     try:
-        n = Article(url.url)
+        n = Article(url.url.strip())
         n.download()
         n.parse()
     except ArticleException as e:
-        raise HTTPException(status_code=400, detail="URL provided is not a valid news article.")
+        raise HTTPException(
+            status_code=400, detail="URL provided is not a valid news article."
+        )
 
-    text = "\n\n".join([line for l in re.split(r"[\r\n]+", n.text) if (line := process_line(l.strip()))])
+    text = "\n\n".join(
+        [
+            line
+            for l in re.split(r"[\r\n]+", n.text)
+            if (line := process_line(l.strip()))
+        ]
+    )
 
-    return {"text": text, "title": n.title, "authors": n.authors, "date": n.publish_date, "cover_image": n.top_image}
+    return {
+        "text": text,
+        "title": n.title,
+        # Weird edge case with CBC authors
+        "authors": n.authors if "cbc.ca" not in url.url else ["CBC Editors"],
+        "date": n.publish_date,
+        "cover_image": n.top_image,
+    }

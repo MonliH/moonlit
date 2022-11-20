@@ -1,6 +1,6 @@
 import type { NextPage } from "next";
 import { Readability } from "@mozilla/readability";
-import {motion} from "framer-motion";
+import { motion } from "framer-motion";
 import Head from "next/head";
 import {
   Badge,
@@ -55,7 +55,7 @@ function Article({ article }: { article: ArticleData }) {
 
   return (
     <Box>
-      <Heading width="55%">{article.title}</Heading>
+      <Heading width="55%" mb="4">{article.title}</Heading>
       <Text fontSize="24px" mb="10">
         {article.authors.join(", ")}
       </Text>
@@ -67,65 +67,60 @@ function Article({ article }: { article: ArticleData }) {
         borderRadius="5"
       />
       <Divider mb="6" width="55%" />
-      
-        {article.text.map((paragraph, index) => {
-          const annotation = article.annotations ? article.annotations[index] : undefined;
-          const component = annotation && (
-            <HStack width="200px" fontSize="xs">
-              {/* {annotation.subjective && (
-                <Tooltip label="This paragraph may be subjective.">
-                  <AlertTriangle color="red" />
-                </Tooltip>
-              )} */}
-              {annotation.emotion && (
-                <Tooltip
-                  label={
-                    annotation.emotion[0] === "neutral"
-                      ? `This paragraph is mostly neutral.`
-                      : `This paragraph may cause feelings of ${annotation.emotion[0]}.`
+
+      {article.text.map((paragraph, index) => {
+        const annotation = article.annotations
+          ? article.annotations[index]
+          : undefined;
+        const component = annotation && (
+          <HStack width="200px" fontSize="xs">
+            {annotation.emotion && (
+              <Tooltip
+                label={
+                  annotation.emotion[0] === "neutral"
+                    ? `This paragraph is mostly neutral.`
+                    : `This paragraph may cause feelings of ${annotation.emotion[0]}.`
+                }
+              >
+                <Badge
+                  fontSize={"sm"}
+                  textTransform={"capitalize"}
+                  fontWeight={
+                    annotation.emotion[0] === "neutral" ? "medium" : "bold"
+                  }
+                  py="2px"
+                  px="6px"
+                  variant={"subtle"}
+                  colorScheme={
+                    annotation.emotion[0] == "neutral"
+                      ? "gray"
+                      : annotation.emotion[1] > 0
+                      ? "green"
+                      : "red"
                   }
                 >
-                  <Badge
-                    fontSize={"sm"}
-                    textTransform={
-                    "capitalize"
-                    }
-                    fontWeight={
-                      annotation.emotion[0] === "neutral" ? "medium" : "bold"
-                    }
-                    py="2px"
-                    px="6px"
-                    variant={"subtle"}
-                    colorScheme={
-                      annotation.emotion[0] == "neutral"
-                        ? "gray"
-                        : annotation.emotion[1] > 0
-                        ? "green"
-                        : "red"
-                    }
-                  >
-                    {capitalizeFirstLetter(annotation.emotion[0])}
-                  </Badge>
-                </Tooltip>
-              )}
-              {!annotation.emotion && !annotation.subjective && (
-                <Tooltip label="This paragraph is neutral.">
-                  <Check color="green" />
-                </Tooltip>
-              )}
-            </HStack>
-          );
-          return (
-            <HStack key={index} mb="6">
-              <Text width="53%" pr="6" mr="2" borderRightWidth="1px">
-                {paragraph}
-              </Text>
-      <motion.div style={{opacity: paperAnnotations}}>
+                  {capitalizeFirstLetter(annotation.emotion[0])}
+                </Badge>
+              </Tooltip>
+            )}
+            {!annotation.emotion && !annotation.subjective && (
+              <Tooltip label="This paragraph is neutral.">
+                <Check color="green" />
+              </Tooltip>
+            )}
+          </HStack>
+        );
+        return (
+          <HStack key={index} mb="6">
+            <Text width="53%" pr="6" mr="2" borderRightWidth="1px">
+              {paragraph}
+            </Text>
+            <motion.div style={{ opacity: paperAnnotations }}>
               {component}
-      </motion.div>
-            </HStack>
-          );
-        })}
+            </motion.div>
+          </HStack>
+        );
+      })}
     </Box>
   );
 }
@@ -159,6 +154,7 @@ const Home: NextPage = () => {
       })();
 
       if (res.ok) {
+        setArticleErr(null);
         const doc = await res.json();
         const lines = doc.text.split(/\n+/).map((line: string) => line.trim());
         doc.text = lines;
@@ -219,17 +215,26 @@ const Home: NextPage = () => {
   };
 
   return (
-    <div>
+    <>
       <Head>
         <title>Moonlit</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <Box px="48" py="36">
-        <Box mb="12">
+      <VStack px="48" py="24" width="100%">
+        <VStack
+          mb="12"
+          alignItems={article ? "flex-start" : "center"}
+          width="100%"
+        >
+            <Image src="/Logo.svg" width="30%" alt="Moonlit" />
+            <Text pb="12" fontSize={"2xl"}>
+              Illuminate your information.
+            </Text>
           <form onSubmit={doFetch}>
-            <FormControl isInvalid={articleErr !== null}>
-              <HStack w="75%">
+            <FormControl isInvalid={articleErr !== null} width="100%">
+              <HStack>
                 <Input
+                  w="40vw"
                   placeholder="News Article URL"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
@@ -245,10 +250,10 @@ const Home: NextPage = () => {
               <FormErrorMessage>{articleErr}</FormErrorMessage>
             </FormControl>
           </form>
-        </Box>
+        </VStack>
         {article && <Article article={article} />}
-      </Box>
-    </div>
+      </VStack>
+    </>
   );
 };
 
