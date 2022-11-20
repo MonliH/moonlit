@@ -1,2 +1,4 @@
 bias_data/
 __pycache__/
+.env
+custom_data/
