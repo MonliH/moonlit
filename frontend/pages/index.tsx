@@ -19,8 +19,9 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { FormEvent, useEffect, useState } from "react";
-import { AlertTriangle, Check } from "react-feather";
+import { AlertTriangle, Check, Edit2 } from "react-feather";
 import { useSpring } from "framer-motion";
+import Link from "next/link";
 
 interface Annotation {
   emotion?: [string, number];
@@ -52,18 +53,20 @@ function Article({ article }: { article: ArticleData }) {
 
   return (
     <Box>
-      <Heading width="55%" mb="4">{article.title}</Heading>
+      <Heading width={{lg: "65%", xl: "55%"}} mb="4">
+        {article.title}
+      </Heading>
       <Text fontSize="24px" mb="10">
         {article.authors.join(", ")}
       </Text>
       <Image
         mb="6"
-        width="55%"
+        width={{lg: "65%", xl: "55%"}}
         src={article.cover_image}
         alt={"Title Image"}
         borderRadius="5"
       />
-      <Divider mb="6" width="55%" />
+      <Divider mb="6" width={{lg: "63%", xl: "55%"}} />
 
       {article.text.map((paragraph, index) => {
         const annotation = article.annotations
@@ -109,7 +112,7 @@ function Article({ article }: { article: ArticleData }) {
         );
         return (
           <HStack key={index} mb="6">
-            <Text width="53%" pr="6" mr="2" borderRightWidth="1px">
+            <Text width={{lg: "65%", xl: "53%"}} pr="6" mr="2" borderRightWidth="1px">
               {paragraph}
             </Text>
             <motion.div style={{ opacity: paperAnnotations }}>
@@ -211,22 +214,42 @@ const Home: NextPage = () => {
     })();
   };
 
+  const reset = () => {
+    setArticle(null);
+    setArticleErr(null);
+    setUrl("");
+  };
+
   return (
     <>
       <Head>
         <title>Moonlit</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <VStack px="48" py="24" width="100%">
+      <VStack px={{lg: "36", xl: "48"}} py="24" width="100%">
         <VStack
-          mb="12"
+          mb="6"
           alignItems={article ? "flex-start" : "center"}
           width="100%"
         >
-            <Image src="/Logo.svg" width="30%" alt="Moonlit" />
-            <Text pb="12" fontSize={"2xl"}>
-              Illuminate your information.
-            </Text>
+          <Button
+            onClick={reset}
+            textDecoration="none"
+            background="none"
+            border="none"
+            padding="0"
+            cursor="pointer"
+            outline="inherit"
+            height="fit-content"
+            width={{lg: "40%", xl: "30%"}}
+            _hover={{
+            }}
+          >
+            <Image src="/Logo.svg" width="100%" alt="Moonlit" />
+          </Button>
+          <Text pb={article ? "3" : "12"} fontSize={"2xl"}>
+            Illuminate your information.
+          </Text>
           <form onSubmit={doFetch}>
             <FormControl isInvalid={articleErr !== null} width="100%">
               <HStack>
@@ -238,17 +261,20 @@ const Home: NextPage = () => {
                 ></Input>
                 <Button
                   type="submit"
+                  colorScheme={"green"}
                   isLoading={fetchingArticle}
                   disabled={fetchingArticle}
                 >
-                  Read
+                  Annotate
                 </Button>
               </HStack>
               <FormErrorMessage>{articleErr}</FormErrorMessage>
             </FormControl>
           </form>
         </VStack>
-        {article && <Article article={article} />}
+        <Divider width="60%"/>
+        <Box pt="8">
+        {article && <Article article={article} />}</Box>
       </VStack>
     </>
   );
