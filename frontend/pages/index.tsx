@@ -1,27 +1,39 @@
 import type { NextPage } from "next";
 import { Readability } from "@mozilla/readability";
-import { motion } from "framer-motion";
 import Head from "next/head";
+import NextImage from "next/image";
 import {
   Badge,
   Box,
   Button,
-  chakra,
   Divider,
   FormControl,
   FormErrorMessage,
+  Grid,
+  GridItem,
   Heading,
   HStack,
   Image,
   Input,
   Text,
   Tooltip,
+  useBreakpointValue,
   VStack,
 } from "@chakra-ui/react";
 import { FormEvent, useEffect, useState } from "react";
 import { AlertTriangle, Check, Edit2 } from "react-feather";
-import { useSpring } from "framer-motion";
 import Link from "next/link";
+import { chakra } from "@chakra-ui/react";
+import {
+  motion,
+  isValidMotionProp,
+  useTransform,
+  useSpring,
+} from "framer-motion";
+
+const ChakraBox = chakra(motion.div, {
+  shouldForwardProp: isValidMotionProp,
+});
 
 interface Annotation {
   emotion?: [string, number];
@@ -53,7 +65,7 @@ function Article({ article }: { article: ArticleData }) {
 
   return (
     <Box>
-      <Heading width={{lg: "65%", xl: "55%"}} mb="4">
+      <Heading width={{ lg: "65%", xl: "55%" }} mb="4">
         {article.title}
       </Heading>
       <Text fontSize="24px" mb="10">
@@ -61,12 +73,12 @@ function Article({ article }: { article: ArticleData }) {
       </Text>
       <Image
         mb="6"
-        width={{lg: "65%", xl: "55%"}}
+        width={{ lg: "65%", xl: "55%" }}
         src={article.cover_image}
         alt={"Title Image"}
         borderRadius="5"
       />
-      <Divider mb="6" width={{lg: "63%", xl: "55%"}} />
+      <Divider mb="6" width={{ lg: "63%", xl: "55%" }} />
 
       {article.text.map((paragraph, index) => {
         const annotation = article.annotations
@@ -112,7 +124,12 @@ function Article({ article }: { article: ArticleData }) {
         );
         return (
           <HStack key={index} mb="6">
-            <Text width={{lg: "65%", xl: "53%"}} pr="6" mr="2" borderRightWidth="1px">
+            <Text
+              width={{ lg: "65%", xl: "53%" }}
+              pr="6"
+              mr="2"
+              borderRightWidth="1px"
+            >
               {paragraph}
             </Text>
             <motion.div style={{ opacity: paperAnnotations }}>
@@ -125,25 +142,78 @@ function Article({ article }: { article: ArticleData }) {
   );
 }
 
+const ImageLink = ({
+  onClick,
+  name,
+  src,
+}: {
+  name: string;
+  src: string;
+  onClick: () => void;
+}) => {
+  const spring = useSpring(0);
+  const fontSize = useBreakpointValue({base:"16px",xl: "18px"})
+  const width = useBreakpointValue({base:"300px",xl: "350px"})
+  return (
+    <motion.div
+      style={{
+        backgroundImage: `url(${src})`,
+        backgroundSize: "cover",
+        width: width,
+        height: "150px",
+        textAlign: "center",
+        borderRadius: "10px",
+        fontSize,
+      }}
+      onClick={onClick}
+      role="button"
+      onMouseEnter={() => spring.set(1)}
+      onMouseLeave={() => spring.set(0)}
+    >
+      <motion.div
+        style={{
+          color: "white",
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          opacity: spring,
+          width: "100%",
+          height: "100%",
+          borderRadius: "10px",
+          padding: "25px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {name}
+      </motion.div>
+    </motion.div>
+  );
+};
+
 const Home: NextPage = () => {
   const [url, setUrl] = useState("");
   const [article, setArticle] = useState<null | ArticleData>(null);
   const [articleErr, setArticleErr] = useState<null | string>(null);
   const [fetchingArticle, setFetchingArticle] = useState(false);
-  const doFetch = (e: FormEvent) => {
+  const doFetch = (e: FormEvent, newU?: string) => {
     e.preventDefault();
+    let cUrl = url;
+    if (newU) {
+      cUrl = newU;
+    }
+    console.log(cUrl, newU);
     (async () => {
       setFetchingArticle(true);
       const res = await fetch("http://localhost:8000/news-info", {
         method: "POST",
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: cUrl }),
         headers: { "Content-Type": "application/json" },
       });
 
       (async () => {
         const res = await fetch("/api/scrape", {
           method: "POST",
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url: cUrl }),
           headers: { "Content-Type": "application/json" },
         });
         const doc = new DOMParser().parseFromString(
@@ -220,13 +290,20 @@ const Home: NextPage = () => {
     setUrl("");
   };
 
+  const linkTo = (url: string) => () => {
+    reset();
+    setUrl(url);
+    console.log(url)
+    doFetch({ preventDefault: () => {} } as FormEvent, url);
+  };
+
   return (
     <>
       <Head>
         <title>Moonlit</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <VStack px={{lg: "36", xl: "48"}} py="24" width="100%">
+      <VStack px={{ lg: "36", xl: "48" }} py="24" width="100%">
         <VStack
           mb="6"
           alignItems={article ? "flex-start" : "center"}
@@ -241,9 +318,8 @@ const Home: NextPage = () => {
             cursor="pointer"
             outline="inherit"
             height="fit-content"
-            width={{lg: "40%", xl: "30%"}}
-            _hover={{
-            }}
+            width={{ lg: "50%", xl: "40%" }}
+            _hover={{}}
           >
             <Image src="/Logo.svg" width="100%" alt="Moonlit" />
           </Button>
@@ -257,9 +333,11 @@ const Home: NextPage = () => {
                   w="40vw"
                   placeholder="News Article URL"
                   value={url}
+                  size="lg"
                   onChange={(e) => setUrl(e.target.value)}
                 ></Input>
                 <Button
+                size="lg"
                   type="submit"
                   colorScheme={"green"}
                   isLoading={fetchingArticle}
@@ -272,9 +350,64 @@ const Home: NextPage = () => {
             </FormControl>
           </form>
         </VStack>
-        <Divider width="60%"/>
-        <Box pt="8">
-        {article && <Article article={article} />}</Box>
+        <Divider width="60%" />
+        {article ? (
+          <Box pt="8">{<Article article={article} />}</Box>
+        ) : (
+          <VStack>
+            <Heading my="4" as="h2" fontSize="25px" fontWeight="regular">Or, try a sample article:</Heading>
+            <Grid
+              templateColumns="repeat(2, 1fr)"
+              templateRows="repeat(2, 1fr)"
+              gap="4"
+            >
+              <GridItem>
+                <ImageLink
+                  onClick={linkTo(
+                    "https://globalnews.ca/news/9290333/alberta-premier-danielle-smith-bleak-role-model-fired-health-leader/"
+                  )}
+                  src={"/sample_a.webp"}
+                  name={
+                    "‘Warped stance on COVID’: Fired Alberta Health Services board member calls out Smith"
+                  }
+                />
+              </GridItem>
+              <GridItem>
+                <ImageLink
+                  onClick={linkTo(
+                    "https://globalnews.ca/news/9290889/alberta-chief-danielle-smith-indigenous-roots-cherokee/"
+                  )}
+                  src={"/sample_b.webp"}
+                  name={
+                    "Alberta chief critical of Premier Danielle Smith’s claim of Indigenous roots"
+                  }
+                />
+              </GridItem>
+              <GridItem>
+                <ImageLink
+                  onClick={linkTo(
+                    "https://www.foxnews.com/opinion/pro-abortion-forces-broke-bank-convince-voters-abortion-extremism-is-normal-they-failed"
+                  )}
+                  src={"/sample_c.webp"}
+                  name={
+                    "Pro-abortion forces broke the bank to convince voters abortion extremism is normal. They failed."
+                  }
+                />
+              </GridItem>
+              <GridItem>
+                <ImageLink
+                  onClick={linkTo(
+                    "https://www.cbc.ca/radio/nowornever/celebrating-everyday-heroes-1.6501032/my-brother-was-my-hero-i-try-to-remember-that-even-after-his-suicide-1.6509687"
+                  )}
+                  src={"/sample_d.webp"}
+                  name={
+                    "My brother was my hero. I try to remember that even after his suicide"
+                  }
+                />
+              </GridItem>
+            </Grid>
+          </VStack>
+        )}
       </VStack>
     </>
   );

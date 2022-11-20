@@ -57,8 +57,8 @@ Reader's emotion:"""
 
 def get_emotion(sentences):
     completion = openai.Completion.create(
-        # engine="gpt-neo-20b",
-        engine="gpt-neo-125m",
+        engine="gpt-neo-20b",
+        # engine="gpt-neo-125m",
         prompt=[emotion_template.format(text=sentence) for sentence in sentences],
         max_tokens=15,
         temperature=0,
@@ -96,6 +96,8 @@ def process_line(line: str):
         or line.startswith("Send this page to someone via email")
         or line.startswith("Story continues below advertisement")
         or line.startswith("FILE -")
+        or line.startswith("Now or Never 12:23")
+        or not any(map(str.isalnum, line))
     ):
         return None
     if line.startswith("Video Ad Feedback"):
