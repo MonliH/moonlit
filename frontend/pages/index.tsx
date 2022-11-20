@@ -43,12 +43,9 @@ function Article({ article }: { article: ArticleData }) {
   const paperAnnotations = useSpring(0);
 
   useEffect(() => {
-    console.log(article.annotations);
     if (article.annotations) {
-      console.log("start animation");
       paperAnnotations.set(1);
     } else {
-      console.log("reverse animation");
       paperAnnotations.set(0);
     }
   }, [article]);
