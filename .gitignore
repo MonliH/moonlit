@@ -1,6 +1,6 @@
 bias_data/
 __pycache__/
-.env
+backend/.env
 custom_data/
 AllSides/
 checkpoints/
