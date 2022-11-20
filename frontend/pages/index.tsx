@@ -23,12 +23,7 @@ import {
 } from "@chakra-ui/react";
 import { FormEvent, useEffect, useState } from "react";
 import { Check } from "react-feather";
-import {
-  motion,
-  useTransform,
-  useSpring,
-  MotionValue,
-} from "framer-motion";
+import { motion, useTransform, useSpring, MotionValue } from "framer-motion";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -367,37 +362,51 @@ const Home: NextPage = () => {
         headers: { "Content-Type": "application/json" },
       });
 
-      (async () => {
-        setBias(undefined);
-        const res = await fetch("/api/scrape", {
-          method: "POST",
-          body: JSON.stringify({ url: cUrl }),
-          headers: { "Content-Type": "application/json" },
-        });
-        const doc = new DOMParser().parseFromString(
-          await res.text(),
-          "text/html"
-        );
-        const article = new Readability(doc).parse();
-        const leanRes = await fetch(`${backendUrl}get-side`, {
-          method: "POST",
-          body: JSON.stringify({ texts: [article!.textContent] }),
-          headers: { "Content-Type": "application/json" },
-        });
-
-        const lean = await leanRes.json();
-        const side = [
-          PoliticalBias.Center,
-          PoliticalBias.Left,
-          PoliticalBias.Right,
-        ][lean.label[0]];
-        const confidence = lean.scores[0];
-        setBias(side);
-      })();
-
       if (res.ok) {
         setArticleErr(null);
         const doc = await res.json();
+
+        (async () => {
+          setBias(undefined);
+          const res = await fetch("/api/scrape", {
+            method: "POST",
+            body: JSON.stringify({ url: cUrl }),
+            headers: { "Content-Type": "application/json" },
+          });
+          const htmlDoc = new DOMParser().parseFromString(
+            await res.text(),
+            "text/html"
+          );
+          const article = new Readability(htmlDoc).parse();
+          let text = "";
+          if (article) {
+            text = article.textContent;
+          } else if (doc.text) {
+            try {
+              text = doc.text[0];
+            } catch (e) {
+              setBias(PoliticalBias.Center);
+              return;
+            }
+          } else {
+            setBias(PoliticalBias.Center);
+            return;
+          }
+          const leanRes = await fetch(`${backendUrl}get-side`, {
+            method: "POST",
+            body: JSON.stringify({ texts: [text] }),
+            headers: { "Content-Type": "application/json" },
+          });
+
+          const lean = await leanRes.json();
+          const side = [
+            PoliticalBias.Center,
+            PoliticalBias.Left,
+            PoliticalBias.Right,
+          ][lean.label[0]];
+          const confidence = lean.scores[0];
+          setBias(side);
+        })();
         const lines = doc.text.split(/\n+/).map((line: string) => line.trim());
         doc.text = lines;
         doc.annotations = undefined;
