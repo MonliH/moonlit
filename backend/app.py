@@ -1,4 +1,6 @@
 from fastapi.middleware.cors import CORSMiddleware
+from scipy.special import softmax
+import numpy as np
 from typing import List
 import re
 from newspaper import Article, ArticleException
@@ -10,7 +12,7 @@ from pydantic import BaseModel
 import dotenv
 import os
 import openai
-from transformers import pipeline, BigBirdForSequenceClassification
+from transformers import pipeline, BigBirdForSequenceClassification, AutoTokenizer
 
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
@@ -39,7 +41,13 @@ subjective_classifier = pipeline(
     "text-classification", model="cffl/bert-base-styleclassification-subjective-neutral"
 )
 model = BigBirdForSequenceClassification.from_pretrained("checkpoints/bigbird-1/checkpoint-3840")
-classify_political_lean = pipeline("text-classification", model=model, tokenizer="google/bigbird-roberta-base")
+tokenizer = AutoTokenizer.from_pretrained("google/bigbird-roberta-base")
+def classify_political_lean(lines):
+    tokens = tokenizer(lines, max_length=4096, truncation=True, padding="max_length", return_tensors="pt")
+    outputs = model(**tokens).logits.detach().numpy()
+    logits = softmax(outputs)
+    predictions = np.argmax(logits, axis=-1)
+    return {"label": predictions.tolist(), "scores": logits.tolist()}
 
 sid = SentimentIntensityAnalyzer()
 
@@ -58,6 +66,17 @@ Reader's emotion: hope
 Sentence: "{text}"
 Reader's emotion:"""
 
+def get_related_words(words, negative):
+    pos = 0
+    result = []
+    for word in re.split(r"([^A-Za-z0-9]+)", words):
+        if re.match(r"[A-Za-z0-9]+", word):
+            scores = sid.polarity_scores(word)
+            if (scores["compound"] < 0 and negative) or (scores["compound"] > 0 and not negative):
+                result.append({"word": word, "score": scores["compound"], "s": pos, "e": pos+len(word)})
+        pos += len(word)
+    
+    return result
 
 def get_emotion(sentences):
     completion = openai.Completion.create(
@@ -69,8 +88,8 @@ def get_emotion(sentences):
         stop="\n",
     )
     return [
-        (label := choice["text"].strip(), sid.polarity_scores(label)["compound"])
-        for choice in completion["choices"]
+        (label := choice["text"].strip(), (scores := sid.polarity_scores(label)["compound"]), get_related_words(sentence, scores < 0))
+        for choice, sentence in zip(completion["choices"], sentences)
     ]
 
 
@@ -97,7 +116,6 @@ async def classify_politics(paragraphs: Texts):
 class Url(BaseModel):
     url: str
 
-
 def process_line(line: str):
     if (
         line.isupper()
@@ -114,7 +132,6 @@ def process_line(line: str):
         return line.removeprefix("Video Ad Feedback")
 
     return line
-
 
 @app.post("/news-info")
 @cache(expire=600)
