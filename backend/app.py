@@ -3,6 +3,7 @@ from typing import List
 import re
 from newspaper import Article, ArticleException
 from fastapi_cache import FastAPICache
+from fastapi_cache.decorator import cache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -78,15 +79,18 @@ class Texts(BaseModel):
 
 
 @app.post("/get-emotion")
+@cache(expire=600)
 async def post_get_emotion(paragraph: Texts):
     return get_emotion(paragraph.texts)
 
 
 @app.post("/is-biased")
+@cache(expire=600)
 async def post_get_emotion(paragraphs: Texts):
     return subjective_classifier(paragraphs.texts)
 
 @app.post("/get-side")
+@cache(expire=600)
 async def classify_politics(paragraphs: Texts):
     return classify_political_lean(paragraphs.texts)
 
@@ -113,6 +117,7 @@ def process_line(line: str):
 
 
 @app.post("/news-info")
+@cache(expire=600)
 async def get_news_info(url: Url):
     try:
         n = Article(url.url.strip())
