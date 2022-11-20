@@ -1,4 +1,5 @@
 import type { NextPage } from "next";
+import { Fragment } from "react";
 import { Readability } from "@mozilla/readability";
 import Head from "next/head";
 import NextImage from "next/image";
@@ -15,6 +16,7 @@ import {
   HStack,
   Image,
   Input,
+  Spinner,
   Text,
   Tooltip,
   useBreakpointValue,
@@ -29,14 +31,21 @@ import {
   isValidMotionProp,
   useTransform,
   useSpring,
+  MotionValue,
 } from "framer-motion";
 
-const ChakraBox = chakra(motion.div, {
-  shouldForwardProp: isValidMotionProp,
-});
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+enum PoliticalBias {
+  Left = "left",
+  Center = "center",
+  Right = "right",
+}
+
+type Keywords = { word: string; score: number; s: number; e: number }[];
 
 interface Annotation {
-  emotion?: [string, number];
+  emotion?: [string, number, Keywords];
   subjective: string;
 }
 
@@ -80,67 +89,218 @@ function Article({ article }: { article: ArticleData }) {
       />
       <Divider mb="6" width={{ lg: "63%", xl: "55%" }} />
 
-      {article.text.map((paragraph, index) => {
-        const annotation = article.annotations
-          ? article.annotations[index]
-          : undefined;
-        const component = annotation && (
-          <HStack width="200px" fontSize="xs">
-            {annotation.emotion && (
-              <Tooltip
-                label={
-                  annotation.emotion[0] === "neutral"
-                    ? `This paragraph is mostly neutral.`
-                    : `This paragraph may cause feelings of ${annotation.emotion[0]}.`
-                }
-              >
-                <Badge
-                  fontSize={"sm"}
-                  textTransform={"capitalize"}
-                  fontWeight={
-                    annotation.emotion[0] === "neutral" ? "medium" : "bold"
-                  }
-                  py="2px"
-                  px="6px"
-                  variant={"subtle"}
-                  colorScheme={
-                    annotation.emotion[0] == "neutral"
-                      ? "gray"
-                      : annotation.emotion[1] > 0
-                      ? "green"
-                      : "red"
-                  }
-                >
-                  {capitalizeFirstLetter(annotation.emotion[0])}
-                </Badge>
-              </Tooltip>
-            )}
-            {!annotation.emotion && !annotation.subjective && (
-              <Tooltip label="This paragraph is neutral.">
-                <Check color="green" />
-              </Tooltip>
-            )}
-          </HStack>
-        );
-        return (
-          <HStack key={index} mb="6">
-            <Text
-              width={{ lg: "65%", xl: "53%" }}
-              pr="6"
-              mr="2"
-              borderRightWidth="1px"
-            >
-              {paragraph}
-            </Text>
-            <motion.div style={{ opacity: paperAnnotations }}>
-              {component}
-            </motion.div>
-          </HStack>
-        );
-      })}
+      {article.text.map((paragraph, index) => (
+        <Paragraph
+          article={article}
+          paragraph={paragraph}
+          index={index}
+          key={index}
+          paperAnnotations={paperAnnotations}
+        />
+      ))}
     </Box>
   );
 }
+
+export const highlightText = (
+  color: MotionValue<string>,
+  darkerColor: MotionValue<string>,
+  text: string,
+  matched_substring: { s: number; e: number },
+  start: number,
+  end: number
+) => {
+  const highlightTextStart = matched_substring.s;
+  const highlightTextEnd = matched_substring.e;
+
+  // The part before matched text
+  const beforeText = text.slice(start, highlightTextStart);
+
+  // Matched text
+  const highlightedText = text.slice(highlightTextStart, highlightTextEnd);
+
+  // Part after matched text
+  // Till the end of text, or till next matched text
+  const afterText = text.slice(highlightTextEnd, end || text.length);
+
+  // Return in array of JSX elements
+  return [
+    beforeText,
+    <motion.span
+      key="0"
+      style={{
+        borderBottom: "3px solid",
+        borderBottomColor: darkerColor,
+        padding: "2px",
+        paddingTop: "0",
+        margin: "-2px",
+        marginTop: "0",
+        backgroundColor: color,
+      }}
+    >
+      {highlightedText}
+    </motion.span>,
+    afterText,
+  ];
+};
+
+export const Highlight = ({
+  color,
+  darkerColor,
+  text,
+  matched_substrings,
+}: {
+  color: MotionValue<string>;
+  darkerColor: MotionValue<string>;
+  text: string;
+  matched_substrings: { s: number; e: number }[];
+}) => {
+  const returnText = [];
+
+  // Just iterate through all matches
+  for (let i = 0; i < matched_substrings.length; i++) {
+    const startOfNext = matched_substrings[i + 1]?.s;
+    if (i === 0) {
+      // If its first match, we start from first character => start at index 0
+      returnText.push(
+        highlightText(
+          color,
+          darkerColor,
+          text,
+          matched_substrings[i],
+          0,
+          startOfNext
+        )
+      );
+    } else {
+      // If its not first match, we start from match.offset
+      returnText.push(
+        highlightText(
+          color,
+          darkerColor,
+          text,
+          matched_substrings[i],
+          matched_substrings[i].s,
+          startOfNext
+        )
+      );
+    }
+  }
+
+  return (
+    <>
+      {returnText.map((text, i) => (
+        <Fragment key={i}>{text}</Fragment>
+      ))}
+    </>
+  );
+};
+
+const Paragraph = ({
+  article,
+  paragraph,
+  index,
+  paperAnnotations,
+}: {
+  paragraph: string;
+  article: ArticleData;
+  index: number;
+  paperAnnotations: any;
+}) => {
+  const annotation = article.annotations
+    ? article.annotations[index]
+    : undefined;
+  const highlight = useSpring(0);
+  const isRed = (annotation?.emotion?.[1] ?? 0) < 0;
+  const color = useTransform(
+    highlight,
+    [0, 1],
+    [
+      isRed ? "rgba(254, 215, 215, 0)" : "rgba(198, 246, 213, 0)",
+      isRed ? "rgba(254, 215, 215, 1)" : "rgba(198, 246, 213, 1)",
+    ]
+  );
+
+  const darkerColor = useTransform(
+    highlight,
+    [0, 1],
+    [
+      isRed ? "rgba(229, 62, 62, 0)" : "rgba(56, 161, 105, 0)",
+      isRed ? "rgba(229, 62, 62, 1)" : "rgba(56, 161, 105, 1)",
+    ]
+  );
+
+  const showKeywords = () => {
+    highlight.set(1);
+  };
+  const hideKeywords = () => {
+    highlight.set(0);
+  };
+
+  const component = annotation && (
+    <HStack width="200px" fontSize="xs">
+      {annotation.emotion && (
+        <Tooltip
+          label={
+            annotation.emotion[0] === "neutral"
+              ? `This paragraph is mostly neutral.`
+              : `This paragraph may cause feelings of ${annotation.emotion[0]}.`
+          }
+        >
+          <Badge
+            onMouseEnter={showKeywords}
+            onMouseLeave={hideKeywords}
+            fontSize={"sm"}
+            textTransform={"capitalize"}
+            fontWeight={annotation.emotion[0] === "neutral" ? "medium" : "bold"}
+            py="2px"
+            px="6px"
+            variant={"subtle"}
+            colorScheme={
+              annotation.emotion[0] == "neutral"
+                ? "gray"
+                : annotation.emotion[1] > 0
+                ? "green"
+                : "red"
+            }
+          >
+            {capitalizeFirstLetter(annotation.emotion[0])}
+          </Badge>
+        </Tooltip>
+      )}
+      {!annotation.emotion && !annotation.subjective && (
+        <Tooltip label="This paragraph is neutral.">
+          <Check color="green" />
+        </Tooltip>
+      )}
+    </HStack>
+  );
+  return (
+    <HStack key={index} mb="6">
+      <Text
+        width={{ lg: "65%", xl: "53%" }}
+        pr="6"
+        mr="2"
+        borderRightWidth="1px"
+      >
+        {annotation &&
+        annotation.emotion?.[1] !== 0 &&
+        annotation.emotion?.[2] &&
+        annotation.emotion?.[2].length ? (
+          <Highlight
+            color={color}
+            text={paragraph}
+            darkerColor={darkerColor}
+            matched_substrings={annotation?.emotion?.[2]}
+          />
+        ) : (
+          paragraph
+        )}
+      </Text>
+      <motion.div style={{ opacity: paperAnnotations }}>{component}</motion.div>
+    </HStack>
+  );
+};
 
 const ImageLink = ({
   onClick,
@@ -152,8 +312,8 @@ const ImageLink = ({
   onClick: () => void;
 }) => {
   const spring = useSpring(0);
-  const fontSize = useBreakpointValue({base:"16px",xl: "18px"})
-  const width = useBreakpointValue({base:"300px",xl: "350px"})
+  const fontSize = useBreakpointValue({ base: "16px", xl: "18px" });
+  const width = useBreakpointValue({ base: "300px", xl: "350px" });
   return (
     <motion.div
       style={{
@@ -195,22 +355,24 @@ const Home: NextPage = () => {
   const [article, setArticle] = useState<null | ArticleData>(null);
   const [articleErr, setArticleErr] = useState<null | string>(null);
   const [fetchingArticle, setFetchingArticle] = useState(false);
+  const [bias, setBias] = useState<null | undefined | PoliticalBias>(null);
+
   const doFetch = (e: FormEvent, newU?: string) => {
     e.preventDefault();
     let cUrl = url;
     if (newU) {
       cUrl = newU;
     }
-    console.log(cUrl, newU);
     (async () => {
       setFetchingArticle(true);
-      const res = await fetch("http://localhost:8000/news-info", {
+      const res = await fetch(`${backendUrl}news-info`, {
         method: "POST",
         body: JSON.stringify({ url: cUrl }),
         headers: { "Content-Type": "application/json" },
       });
 
       (async () => {
+        setBias(undefined);
         const res = await fetch("/api/scrape", {
           method: "POST",
           body: JSON.stringify({ url: cUrl }),
@@ -221,6 +383,20 @@ const Home: NextPage = () => {
           "text/html"
         );
         const article = new Readability(doc).parse();
+        const leanRes = await fetch(`${backendUrl}get-side`, {
+          method: "POST",
+          body: JSON.stringify({ texts: [article!.textContent] }),
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const lean = await leanRes.json();
+        const side = [
+          PoliticalBias.Center,
+          PoliticalBias.Left,
+          PoliticalBias.Right,
+        ][lean.label[0]];
+        const confidence = lean.scores[0];
+        setBias(side);
       })();
 
       if (res.ok) {
@@ -231,37 +407,12 @@ const Home: NextPage = () => {
         doc.annotations = undefined;
         setArticle(doc);
 
-        // const isNeutral = await fetch("http://localhost:8000/is-biased", {
-        //   method: "POST",
-        //   body: JSON.stringify({ texts: lines }),
-        //   headers: { "Content-Type": "application/json" },
-        // });
-        // const isNeutralJson = await isNeutral.json();
-        // const newDoc = {
-        //   ...doc,
-        //   annotations: isNeutralJson.map(
-        //     ({ label, score }: { label: string; score: number }) =>
-        //       label === "NEUTRAL"
-        //         ? { emotion: undefined, subjective: false }
-        //         : {
-        //             emotion: undefined,
-        //             subjective: label === "SUBJECTIVE" && score > 0.7,
-        //           }
-        //   ),
-        // };
-        // const nonNeutralParagraphs = isNeutralJson
-        //   .map(
-        //     ({ label, score }: { label: string; score: number }, idx: number) =>
-        //       label === "NEUTRAL" ? null : idx
-        //   )
-        //   .filter((idx: number | null) => idx !== null);
-
         const newDoc = {
           ...doc,
           text: [...doc.text],
         };
 
-        const emotionRes = await fetch("http://localhost:8000/get-emotion", {
+        const emotionRes = await fetch(`${backendUrl}get-emotion`, {
           method: "POST",
           body: JSON.stringify({
             texts: newDoc.text,
@@ -270,9 +421,11 @@ const Home: NextPage = () => {
         });
 
         const emotion = await emotionRes.json();
-        newDoc.annotations = emotion.map((emotion: [string, number]) => ({
-          emotion,
-        }));
+        newDoc.annotations = emotion.map(
+          (emotion: [string, number, Keywords]) => ({
+            emotion,
+          })
+        );
 
         setArticle(newDoc);
       } else {
@@ -293,7 +446,6 @@ const Home: NextPage = () => {
   const linkTo = (url: string) => () => {
     reset();
     setUrl(url);
-    console.log(url)
     doFetch({ preventDefault: () => {} } as FormEvent, url);
   };
 
@@ -337,7 +489,7 @@ const Home: NextPage = () => {
                   onChange={(e) => setUrl(e.target.value)}
                 ></Input>
                 <Button
-                size="lg"
+                  size="lg"
                   type="submit"
                   colorScheme={"green"}
                   isLoading={fetchingArticle}
@@ -352,10 +504,36 @@ const Home: NextPage = () => {
         </VStack>
         <Divider width="60%" />
         {article ? (
-          <Box pt="8">{<Article article={article} />}</Box>
+          <Box pt="8">
+            <HStack mb="2" alignItems={"center"} height="27px">
+              <Text>Detected political leaning:</Text>
+              {bias === undefined && <Spinner size="sm" />}
+              {bias !== null && bias !== undefined && (
+                <Badge
+                  fontSize={"lg"}
+                  colorScheme={
+                    bias === PoliticalBias.Left
+                      ? "blue"
+                      : bias === PoliticalBias.Right
+                      ? "red"
+                      : "yellow"
+                  }
+                >
+                  {bias === PoliticalBias.Left
+                    ? "Left"
+                    : bias === PoliticalBias.Right
+                    ? "Right"
+                    : "Center"}
+                </Badge>
+              )}
+            </HStack>
+            {<Article article={article} />}
+          </Box>
         ) : (
           <VStack>
-            <Heading my="4" as="h2" fontSize="25px" fontWeight="regular">Or, try a sample article:</Heading>
+            <Heading my="4" as="h2" fontSize="25px" fontWeight="regular">
+              Or, try a sample article:
+            </Heading>
             <Grid
               templateColumns="repeat(2, 1fr)"
               templateRows="repeat(2, 1fr)"
@@ -397,11 +575,11 @@ const Home: NextPage = () => {
               <GridItem>
                 <ImageLink
                   onClick={linkTo(
-                    "https://www.cbc.ca/radio/nowornever/celebrating-everyday-heroes-1.6501032/my-brother-was-my-hero-i-try-to-remember-that-even-after-his-suicide-1.6509687"
+                    "https://apnews.com/article/elon-musk-biden-twitter-inc-technology-congress-d88e3de4b3cc095926dc133f53dc3320"
                   )}
-                  src={"/sample_d.webp"}
+                  src={"/sample_d.jpeg"}
                   name={
-                    "My brother was my hero. I try to remember that even after his suicide"
+                    "Musk restores Trump’s Twitter account after online poll"
                   }
                 />
               </GridItem>
